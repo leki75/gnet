@@ -37,16 +37,17 @@ import (
 )
 
 type eventloop struct {
-	ln           *listener       // listener
-	idx          int             // loop index in the engine loops list
-	cache        bytes.Buffer    // temporary buffer for scattered bytes
-	engine       *engine         // engine in loop
-	poller       *netpoll.Poller // epoll or kqueue
-	buffer       []byte          // read packet buffer whose capacity is set by user, default value is 64KB
-	connCount    int32           // number of active connections in event-loop
-	udpSockets   map[int]*conn   // client-side UDP socket map: fd -> conn
-	connections  map[int]*conn   // TCP connection map: fd -> conn
-	eventHandler EventHandler    // user eventHandler
+	ln             *listener       // listener
+	idx            int             // loop index in the engine loops list
+	cache          bytes.Buffer    // temporary buffer for scattered bytes
+	engine         *engine         // engine in loop
+	poller         *netpoll.Poller // epoll or kqueue
+	buffer         []byte          // read packet buffer whose capacity is set by user, default value is 64KB
+	connCount      int32           // number of active connections in event-loop
+	udpMcastSocket *conn           // udp multicast connection
+	udpSockets     map[int]*conn   // client-side UDP socket map: fd -> conn
+	connections    map[int]*conn   // TCP connection map: fd -> conn
+	eventHandler   EventHandler    // user eventHandler
 }
 
 func (el *eventloop) getLogger() logging.Logger {
@@ -301,7 +302,11 @@ func (el *eventloop) readUDP(fd int, _ netpoll.IOEvent) error {
 	}
 	var c *conn
 	if fd == el.ln.fd {
-		c = newUDPConn(fd, el, el.ln.addr, sa, false)
+		if el.udpMcastSocket != nil {
+			c = el.udpMcastSocket
+		} else {
+			c = newUDPConn(fd, el, el.ln.addr, sa, false)
+		}
 	} else {
 		c = el.udpSockets[fd]
 	}

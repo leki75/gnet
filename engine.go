@@ -20,6 +20,7 @@ package gnet
 
 import (
 	"context"
+	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -109,6 +110,14 @@ func (eng *engine) activateEventLoops(numEventLoop int) (err error) {
 			el.ln = ln
 			el.engine = eng
 			el.poller = p
+			if udpAddr, ok := ln.addr.(*net.UDPAddr); ok && udpAddr.IP.IsMulticast() {
+				el.udpMcastSocket = &conn{
+					fd:         ln.fd,
+					loop:       el,
+					localAddr:  ln.addr,
+					isDatagram: true,
+				}
+			}
 			el.buffer = make([]byte, eng.opts.ReadBufferCap)
 			el.connections = make(map[int]*conn)
 			el.eventHandler = eng.eventHandler
